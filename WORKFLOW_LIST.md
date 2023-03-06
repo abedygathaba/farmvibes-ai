@@ -24,7 +24,11 @@ This includes raw data sources (e.g., Sentinel 1 and 2, LandSat, CropDataLayer) 
 
 - `gedi/download_gedi_rh100.yaml`: Downloads L2B GEDI products and extracts RH100 variables.
 
+- `gnatsgo/download_gnatsgo.yaml`: Downloads gNATSGO raster data that intersect with the input geometry and time range.
+
 - `landsat/preprocess_landsat.yaml`: Downloads and preprocesses LANDSAT tiles that intersect with the input geometry and time range.
+
+- `modis/download_modis_surface_reflectance.yaml`: Downloads MODIS 8-day surface reflectance rasters that intersect with the input geometry and time range.
 
 - `modis/download_modis_vegetation_index.yaml`: Downloads MODIS 16-day vegetation index products that intersect with the input geometry and time range.
 
@@ -33,6 +37,8 @@ This includes raw data sources (e.g., Sentinel 1 and 2, LandSat, CropDataLayer) 
 - `osm_road_geometries.yaml`: Downloads road geometry for input region from Open Street Maps.
 
 - `sentinel1/preprocess_s1.yaml`: Downloads and preprocesses tiles of Sentinel-1 imagery that intersect with the input Sentinel-2 products in the input time range.
+
+- `sentinel1/preprocess_s1_rtc.yaml`: Downloads and preprocesses tiles of Sentinel-1 imagery that intersect with the input Sentinel-2 products in the input time range.
 
 - `sentinel2/cloud_ensemble.yaml`: Computes the cloud probability of a Sentinel-2 L2A raster using an ensemble of five cloud segmentation models.
 
@@ -72,11 +78,15 @@ This includes raw data sources (e.g., Sentinel 1 and 2, LandSat, CropDataLayer) 
 
 - `weather/download_era5_monthly.yaml`: Monthly estimated weather variables.
 
+- `weather/download_gridmet.yaml`: Daily surface meteorological properties from GridMET.
+
+- `weather/download_terraclimate.yaml`: Monthly climate and hydroclimate properties from TerraClimate.
+
 - `weather/get_ambient_weather.yaml`: Downloads weather data from an Ambient Weather station.
 
 - `weather/get_forecast.yaml`: Downloads weather forecast data from NOAA Global Forecast System (GFS) for the input time range.
 
-- `weather/herbie_forecast.yaml`: Download Forecast observations for provided location & time range using herbie python package.
+- `weather/herbie_forecast.yaml`: Downloads forecast observations for provided location & time range using herbie python package.
 
 
 ## data_processing
@@ -95,7 +105,7 @@ This includes raw data sources (e.g., Sentinel 1 and 2, LandSat, CropDataLayer) 
 
 - `outlier/detect_outlier.yaml`: Fits a single-component Gaussian Mixture Model (GMM) over input data to detect outliers according to the threshold parameter.
 
-- `threshold/threshold_raster.yaml`: Thresholds values of an input raster if higher than the threshold parameter.
+- `threshold/threshold_raster.yaml`: Thresholds values of the input raster if higher than the threshold parameter.
 
 - `timeseries/timeseries_aggregation.yaml`: Computes the mean, standard deviation, maximum, and minimum values of all regions of the raster and aggregates them into a timeseries.
 

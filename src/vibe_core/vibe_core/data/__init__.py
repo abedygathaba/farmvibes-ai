@@ -20,11 +20,13 @@ from .core_types import (
 )
 from .products import (
     ChirpsProduct,
+    ClimatologyLabProduct,
     DemProduct,
     Era5Product,
     GEDIProduct,
+    GNATSGOProduct,
     LandsatProduct,
-    ModisVegetationProduct,
+    ModisProduct,
     NaipProduct,
 )
 from .rasters import (
@@ -32,6 +34,7 @@ from .rasters import (
     ChunkLimits,
     CloudRaster,
     DemRaster,
+    GNATSGORaster,
     NaipRaster,
     Raster,
     RasterChunk,
