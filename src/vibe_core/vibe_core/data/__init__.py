@@ -1,22 +1,33 @@
 from .airbus import AirbusPrice, AirbusProduct, AirbusRaster
-from .carbon import BoundariesInfo, CarbonOffsetInfo, CarbonScenario, FarmersInfo, WhatIfScenario
 from .core_types import (
     AssetVibe,
+    BaseVibe,
+    BaseVibeDict,
     BBox,
     DataSummaryStatistics,
     DataVibe,
-    DataVibeDict,
     ExternalReference,
     ExternalReferenceList,
     FoodFeatures,
     FoodVibe,
     GeometryCollection,
+    GHGFlux,
+    GHGProtocolVibe,
     ProteinSequence,
     TimeRange,
     TimeSeries,
     TypeDictVibe,
     gen_guid,
     gen_hash_id,
+    CarbonOffsetInfo,
+)
+from .farm import (
+    ADMAgSeasonalFieldInput,
+    FertilizerInformation,
+    HarvestInformation,
+    OrganicAmendmentInformation,
+    SeasonalFieldInformation,
+    TillageInformation,
 )
 from .products import (
     ChirpsProduct,

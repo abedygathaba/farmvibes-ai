@@ -1,6 +1,30 @@
 #!/bin/bash
 # Copyright (c) Microsoft Corporation.
 
+## install_terraform() [path]
+##
+##   Installs the terraform binary built for the OS os in architecture arch to
+##   optional path. If the path is not provided, the script uses
+##   $FARMVIBES_AI_CONFIG_DIR/terraform.
+##
+install_terraform() {
+  local path=${1:-"${FARMVIBES_AI_CONFIG_DIR}/terraform.zip"}
+  local exe_path=${TERRAFORM}
+
+  local os=$(determine_os)
+  local arch=$(determine_arch)
+  local full_url="https://releases.hashicorp.com/terraform/1.3.9/terraform_1.3.9_${os}_${arch}.zip"
+
+  if [ ! -f "${path}" ]; then
+    echo "Downloading terraform at ${path}..."
+    ${CURL} -L "${full_url}" -o ${path}
+    unzip -o ${path} -d ${FARMVIBES_AI_CONFIG_DIR}
+    rm ${path}
+  fi
+
+  chmod +x "${exe_path}"
+}
+
 ## install_k3d() [path]
 ##
 ##   Installs the k3d binary built for the OS os in architecture arch to
@@ -22,16 +46,6 @@ install_k3d() {
     mkdir -p "${base}" || die "Failed to create local bin path ${base}"
     mkdir -p "${FARMVIBES_AI_STORAGE_PATH}" || die "Failed to create local bin path ${FARMVIBES_AI_STORAGE_PATH}"
   fi
-
-  for dir in "$FARMVIBES_AI_DATA_DIRS"
-  do
-    mkdir -p "${FARMVIBES_AI_STORAGE_PATH}/${dir}"
-  done
-  for fields in "${FARMVIBES_AI_DEPLOYMENTS[@]}"
-  do
-    IFS=$'|' read -r deployment yaml <<< "$fields"
-    mkdir -p "${FARMVIBES_AI_STORAGE_PATH}/logs/${deployment}"
-  done
 
   ${CURL} -sL "${K3D_URL}" | env USE_SUDO="false" TAG="$K3D_VERSION" K3D_INSTALL_DIR="$base" bash
 }
@@ -101,18 +115,6 @@ has_stateful_set() {
   ${KUBECTL} get statefulset "$1" > /dev/null 2> /dev/null && return 0 || return 1
 }
 
-## install_dapr_in_cluster()
-##
-##   Installs and/or upgrades dapr in the cluster
-##
-install_dapr_in_cluster() {
-  PATH="${FARMVIBES_AI_CONFIG_DIR}:$PATH" ${DAPR} status -k 2> /dev/null && \
-    PATH="${FARMVIBES_AI_CONFIG_DIR}:$PATH" ${DAPR} upgrade -k --runtime-version "${DAPR_RUNTIME_VERSION}" || \
-    PATH="${FARMVIBES_AI_CONFIG_DIR}:$PATH" ${DAPR} init \
-      --runtime-version "${DAPR_RUNTIME_VERSION}" \
-      --dashboard-version "${DAPR_DASHBOARD_VERSION}" -k
-}
-
 ## backup_redis_data()
 ##
 ##   Store redis data before destroying the cluster.
@@ -146,7 +148,7 @@ restore_redis_data() {
   # previous dump.
   if [[ $(ls ${FARMVIBES_AI_REDIS_BACKUP_FILE} 2> /dev/null) ]]; then
 
-    confirm_action "Do you want to restore the workflow execution records from old cluster?" || return 0
+    confirm_action "Do you want to restore the workflow execution records from a previous cluster?" || return 0
 
     # Read the redis master pod name
     pod_name=$(${KUBECTL} get pods --no-headers -o custom-columns=":metadata.name" -l app.kubernetes.io/component=master)
@@ -176,54 +178,13 @@ restore_redis_data() {
   fi
 }
 
-## install_redis()
-##
-##   Uses the bitnami helm chart to install redis in the current k8s cluster.
-##
-install_redis() {
-  has_stateful_set redis-master && return
-
-  echo "Installing redis in the cluster..."
-  ${HELM} repo add bitnami https://charts.bitnami.com/bitnami > /dev/null || \
-    die "Failed to add redis helm chart"
-  ${HELM} repo update > /dev/null || \
-    die "Failed to update helm repo"
-  ${HELM} install redis --set commonConfiguration="appendonly no"  --set image.tag="${REDIS_IMAGE_TAG}" bitnami/redis > /dev/null || \
-    die "Failed to install redis in k8s cluster"
-  ${KUBECTL} scale --replicas 0 statefulsets/redis-replicas
-}
-
-## install_rabbitmq()
-##
-##   Uses the bitnami helm chart to install rabbitmq in the current k8s cluster.
-##
-install_rabbitmq() {
-  local rabbitmq_password rabbitmq_connection_string
-  local jsonpath="{.data.rabbitmq-password}"
-
-  has_stateful_set rabbitmq && return
-
-  echo "Installing rabbitmq in the cluster..."
-  ${HELM} repo update > /dev/null || \
-    die "Failed to update helm repo"
-  ${HELM} install rabbitmq --set image.tag="${RABBITMQ_IMAGE_TAG}" bitnami/rabbitmq --wait > /dev/null || \
-    die "Failed to install rabbitmq in k8s cluster"
-
-  increase_rabbit_timeout
-
-  rabbitmq_password=$(${KUBECTL} get secret rabbitmq -o jsonpath=$jsonpath | base64 -d)
-  rabbitmq_connection_string="amqp://user:${rabbitmq_password}@rabbitmq.default.svc.cluster.local:5672"
-
-  ${KUBECTL} create secret generic ${RABBITMQ_SECRET} \
-    --from-literal=${RABBITMQ_SECRET}=$rabbitmq_connection_string
-}
-
 ## increase_rabbit_timeout()
 ##
 ##   Increases consumer timeout in RabbitMQ
 ##
 increase_rabbit_timeout() {
-  ${KUBECTL} exec -it rabbitmq-0 -- rabbitmqctl eval "application:set_env(rabbit, consumer_timeout, ${RABBITMQ_MAX_TIMEOUT_MS})."
+  ${KUBECTL} rollout status statefulset rabbitmq
+  ${KUBECTL} exec -i rabbitmq-0 -- rabbitmqctl eval "application:set_env(rabbit, consumer_timeout, ${RABBITMQ_MAX_TIMEOUT_MS})."
 }
 
 ## install_dapr() [path]
@@ -263,6 +224,25 @@ install_dependencies() {
   install_k3d || die "Failed to install k3d. Aborting..."
   install_kubectl || die "Failed to install kubectl. Aborting..."
   install_helm || die "Failed to install helm. Aborting..."
+  install_terraform || die "Failed to install terraform. Aborting..."
 
   echo "FarmVibes.AI dependencies installed!"
+}
+
+## create_data_and_log_dirs()
+##
+##   Creates the data directories for the cluster.
+##
+create_data_and_log_dirs() {
+  for dir in "${FARMVIBES_AI_DATA_DIRS[@]}"
+  do
+    mkdir -p "${FARMVIBES_AI_STORAGE_PATH}/${dir}" || \
+      die "Failed to create ${dir} directory. Do you have permissions to write "\
+        "in ${FARMVIBES_AI_STORAGE_PATH}?"
+  done
+  for fields in "${FARMVIBES_AI_DEPLOYMENTS[@]}"
+  do
+    IFS=$'|' read -r deployment yaml <<< "$fields"
+    mkdir -p "${FARMVIBES_AI_STORAGE_PATH}/logs/${deployment}"
+  done
 }

@@ -1,6 +1,8 @@
 name: Build FarmVibes.AI cluster
 run-name: Cluster build and helloworld test
 on: [push, pull_request, workflow_dispatch]
+env:
+  FARMVIBES_AI_SKIP_DOCKER_FREE_SPACE_CHECK: yes
 jobs: 
   build:
     name: Build and test
@@ -30,6 +32,10 @@ jobs:
           echo "Available storage:"
           df -h
           echo
+
+      - name: Update pip version
+        shell: bash
+        run: pip install --upgrade pip
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -90,18 +96,6 @@ jobs:
         run: ./farmvibes-ai.sh update
 
       - name: Re-run Hello World
-        shell: bash
-        run: |
-          rm -fr ~/.cache/farmvibes-ai/data/{assets,stac}
-          python -m vibe_core.farmvibes_ai_hello_world 300
-
-      - name: Stop-start cluster
-        shell: bash
-        run: |
-          ./farmvibes-ai.sh stop
-          ./farmvibes-ai.sh start
-
-      - name: Re-run Hello World one last time
         shell: bash
         run: |
           rm -fr ~/.cache/farmvibes-ai/data/{assets,stac}
