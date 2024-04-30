@@ -4,6 +4,7 @@ from .core_types import (
     BaseVibe,
     BaseVibeDict,
     BBox,
+    CarbonOffsetInfo,
     DataSummaryStatistics,
     DataVibe,
     ExternalReference,
@@ -13,15 +14,19 @@ from .core_types import (
     GeometryCollection,
     GHGFlux,
     GHGProtocolVibe,
+    OrdinalTrendTest,
+    Point,
     ProteinSequence,
+    RasterPixelCount,
     TimeRange,
     TimeSeries,
     TypeDictVibe,
     gen_guid,
     gen_hash_id,
-    CarbonOffsetInfo,
 )
 from .farm import (
+    ADMAgPrescription,
+    ADMAgPrescriptionInput,
     ADMAgSeasonalFieldInput,
     FertilizerInformation,
     HarvestInformation,
@@ -30,12 +35,17 @@ from .farm import (
     TillageInformation,
 )
 from .products import (
+    AlosProduct,
     ChirpsProduct,
     ClimatologyLabProduct,
     DemProduct,
     Era5Product,
+    EsriLandUseLandCoverProduct,
     GEDIProduct,
+    GLADProduct,
     GNATSGOProduct,
+    HansenProduct,
+    HerbieProduct,
     LandsatProduct,
     ModisProduct,
     NaipProduct,
@@ -46,12 +56,13 @@ from .rasters import (
     CloudRaster,
     DemRaster,
     GNATSGORaster,
+    LandsatRaster,
+    ModisRaster,
     NaipRaster,
     Raster,
     RasterChunk,
     RasterIlluminance,
     RasterSequence,
-    ModisRaster,
 )
 from .sentinel import (
     DownloadedSentinel1Product,
@@ -71,4 +82,4 @@ from .sentinel import (
     TiledSentinel1Product,
 )
 from .utils import StacConverter
-from .weather import GfsForecast, gen_forecast_time_hash_id
+from .weather import GfsForecast, Grib, gen_forecast_time_hash_id

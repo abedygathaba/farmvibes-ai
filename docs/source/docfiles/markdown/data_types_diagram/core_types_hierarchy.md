@@ -2,17 +2,11 @@
 <div class="mermaid">
 
 classDiagram
-  class Dict {
-  }
-  class Type {
-  }
   class AssetVibe {
   }
   class BaseVibe {
   }
   class CarbonOffsetInfo {
-  }
-  class Config {
   }
   class DataSequence {
   }
@@ -34,9 +28,13 @@ classDiagram
   }
   class GeometryCollection {
   }
+  class OrdinalTrendTest {
+  }
   class ProteinSequence {
   }
   class PydanticAssetVibe {
+  }
+  class RasterPixelCount {
   }
   class TimeSeries {
   }
@@ -60,10 +58,10 @@ classDiagram
   GHGFlux --|> DataVibe
   GHGProtocolVibe --|> DataVibe
   GeometryCollection --|> DataVibe
+  OrdinalTrendTest --|> DataVibe
   ProteinSequence --|> DataVibe
+  RasterPixelCount --|> DataVibe
   TimeSeries --|> DataVibe
-  TypeDictVibe --|> Dict
-  UnresolvedDataVibe --|> Type
   UnresolvedDataVibe --|> BaseVibe
 
 

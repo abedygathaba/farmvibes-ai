@@ -2,6 +2,7 @@ import hashlib
 import logging
 import re
 import uuid
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,9 @@ LOGGER = logging.getLogger(__name__)
 BBox = Tuple[float, float, float, float]
 """Type alias for a bounding box, as a tuple of four floats (minx, miny, maxx, maxy)."""
 
+Point = Tuple[float, float]
+"""Type alias for a point, as a tuple of two floats (x, y)."""
+
 TimeRange = Tuple[datetime, datetime]
 """Type alias for a time range, as a tuple of two `datetime` objects (start, end)."""
 
@@ -54,7 +58,9 @@ def gen_guid():
 
 
 def gen_hash_id(
-    name: str, geometry: Union[BaseGeometry, Dict[str, Any]], time_range: Tuple[datetime, datetime]
+    name: str,
+    geometry: Union[BaseGeometry, Dict[str, Any]],
+    time_range: Tuple[datetime, datetime],
 ):
     """
     Generates a hash ID based on a name, a geometry, and a time range.
@@ -348,21 +354,27 @@ class BaseVibe:
         def pydantic_model(cls):  # type: ignore
             if is_dataclass(cls):
                 if issubclass(cls, DataVibe):
+                    cls = deepcopy(cls)
+                    if 'asset_geometry' in cls.__dataclass_fields__:  # type: ignore
+                        f = cls.__dataclass_fields__['asset_geometry']
+                        f.type = Dict[str, Any]  # type: ignore
 
                     @pydataclass
                     class PydanticAssetVibe(AssetVibe):
                         pass
 
-                    @pydataclass
-                    class Tmp(cls):
+                    @dataclass
+                    class Tmp(cls):  # type: ignore
                         assets: List[PydanticAssetVibe]
+                        if (
+                            hasattr(cls, "__annotations__")
+                            and "asset_geometry" in cls.__annotations__
+                        ):
+                            asset_geometry: Dict[str, Any] = field(default_factory=dict)
 
-                        class Config:
-                            underscore_attrs_are_private = True
-                            arbitrary_types_allowed = True
-
-                    Tmp.__name__ = cls.__name__  # Tmp in the repr would confuse users
-                    return Tmp.__pydantic_model__  # type: ignore
+                    Model = pydataclass(Tmp)
+                    Model.__name__ = cls.__name__  # Model in the repr would confuse users
+                    return Model.__pydantic_model__  # type: ignore
 
                 return pydataclass(cls).__pydantic_model__
             if issubclass(cls, BaseModel):
@@ -506,10 +518,25 @@ class TimeSeries(DataVibe):
 
 
 @dataclass
+class RasterPixelCount(DataVibe):
+    """Represents a data object in FarmVibes.AI that stores the pixel count of a raster."""
+
+    pass
+
+
+@dataclass
 class DataSummaryStatistics(DataVibe):
     """Represents a data summary statistics object in FarmVibes.AI."""
 
     pass
+
+
+@dataclass
+class OrdinalTrendTest(DataVibe):
+    """Represents a trend test (Chochan-Armitage) result object in FarmVibes.AI."""
+
+    p_value: float
+    z_score: float
 
 
 @dataclass

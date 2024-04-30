@@ -1,10 +1,12 @@
 import json
+import logging
 import os
 import time
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import asdict
 from datetime import datetime
+from enum import auto
 from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast, overload
 from urllib.parse import urljoin
 
@@ -16,23 +18,27 @@ from dateutil.tz.tz import tzfile
 from requests.exceptions import HTTPError
 from shapely import geometry as shpg
 from shapely.geometry.base import BaseGeometry
+from strenum import StrEnum
 
 from vibe_core.data import BaseVibeDict, StacConverter
 from vibe_core.data.core_types import BaseVibe
 from vibe_core.data.json_converter import dump_to_json
 from vibe_core.data.utils import deserialize_stac, serialize_input
 from vibe_core.datamodel import (
+    MetricsDict,
+    MonitoredWorkflowRun,
     RunConfigInput,
     RunConfigUser,
     RunDetails,
     RunStatus,
     SpatioTemporalJson,
     TaskDescription,
+    WorkflowRun,
 )
 from vibe_core.monitor import VibeWorkflowDocumenter, VibeWorkflowRunMonitor
 from vibe_core.utils import ensure_list, format_double_escaped
 
-FALLBACK_SERVICE_URL = "http://192.168.49.2:30000/"
+FALLBACK_SERVICE_URL = "http://127.0.0.1:31108/"
 """Fallback URL for FarmVibes.AI service.
 
 :meta hide-value:
@@ -68,30 +74,16 @@ T = TypeVar("T", bound=BaseVibe, covariant=True)
 InputData = Union[Dict[str, Union[T, List[T]]], List[T], T]
 
 
-class WorkflowRun(ABC):
-    """An abstract base class for workflow runs."""
+class ClusterType(StrEnum):
+    """An enumeration of cluster types."""
 
-    @property
-    @abstractmethod
-    def status(self) -> str:
-        """Gets the status of the workflow run.
+    remote = auto()
+    local = auto()
 
-        :return: The status of the workflow run as a string.
-
-        :raises NotImplementedError: If the method is not implemented by a subclass.
-        """
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def output(self) -> BaseVibeDict:
-        """Gets the output of the workflow run.
-
-        :return: The output of the workflow run as a :class:`vibe_core.data.BaseVibeDict`.
-
-        :raises NotImplementedError: If the method is not implemented by a subclass.
-        """
-        raise NotImplementedError
+    def client(self):
+        return FarmvibesAiClient(
+            get_remote_service_url() if self.value == self.remote else get_local_service_url()
+        )
 
 
 class Client(ABC):
@@ -102,7 +94,6 @@ class Client(ABC):
         """Lists all available workflows.
 
         :return: A list of workflow names.
-
         :raises NotImplementedError: If the method is not implemented by a subclass.
         """
         raise NotImplementedError
@@ -119,9 +110,7 @@ class Client(ABC):
         :param workflow: The name of the workflow to run.
         :param geometry: The geometry to run the workflow on.
         :param time_range: The time range to run the workflow on.
-
         :return: A :class:`WorkflowRun` object.
-
         :raises NotImplementedError: If the method is not implemented by a subclass.
         """
         raise NotImplementedError
@@ -284,10 +273,16 @@ class FarmvibesAiClient(Client):
             The keys are 'name', 'description', 'inputs', 'outputs' and 'parameters'.
         """
         desc = self._request("GET", f"v0/workflows/{workflow_name}?return_format=description")
+
+        param_descriptions = desc["description"]["parameters"]
+        for p, d in param_descriptions.items():
+            if isinstance(d, List):
+                param_descriptions[p] = d[0]
+
         desc["description"] = TaskDescription(**desc["description"])
         return desc
 
-    def get_system_metrics(self) -> Dict[str, Union[int, float, Tuple[float, ...]]]:
+    def get_system_metrics(self) -> MetricsDict:
         """Gets system metrics from the FarmVibes.AI service.
 
         This method returns a dictionary containing various system metrics,
@@ -295,7 +290,8 @@ class FarmvibesAiClient(Client):
 
         :return: A dictionary containing system metrics.
         """
-        return self._request("GET", "v0/system-metrics")
+        metrics = self._request("GET", "v0/system-metrics")
+        return MetricsDict(**metrics)
 
     def get_workflow_yaml(self, workflow_name: str) -> str:
         """Gets the YAML definition of a workflow.
@@ -332,6 +328,30 @@ class FarmvibesAiClient(Client):
             the cancellation was successful or not.
         """
         return self._request("POST", f"v0/runs/{run_id}/cancel")["message"]
+
+    def delete_run(self, run_id: str) -> str:
+        """Deletes a workflow run.
+
+        This method sends a request to the FarmVibes.AI service to delete a completed workflow run
+        (i.e. a run with the a status of 'done', 'failed', or 'cancelled'). If the deletion is
+        successful, all cached data the workflow run produced that is not shared with other workflow
+        runs will be deleted and status will be set to 'deleted'.
+
+        .. note::
+            The deletion may take some time to take effect depending on the state of the workflow
+            run and the service availability.
+
+        .. warning::
+            A workflow run that is in progress or pending cannot be deleted. A cancelled workflow
+            run can be deleted. So, in order to delete workflow run that is in progress or pending,
+            it first needs to be cancelled and then it can be deleted.
+
+        :param run_id: The ID of the workflow run to delete.
+
+        :return: The message from the FarmVibes.AI service indicating whether the deletion request
+          was successful or not.
+        """
+        return self._request("DELETE", f"v0/runs/{run_id}")["message"]
 
     def describe_run(self, run_id: str) -> RunConfigUser:
         """Describes a workflow run.
@@ -415,6 +435,29 @@ class FarmvibesAiClient(Client):
         fields = ["id", "name", "workflow", "parameters"]
         run = self.list_runs(id, fields=fields)[0]
         return VibeWorkflowRun(*(run[f] for f in fields), self)  # type: ignore
+
+    def get_last_runs(self, n: int) -> List["VibeWorkflowRun"]:
+        """Gets the last 'n' workflow runs.
+
+        This method returns a list of :class:`VibeWorkflowRun` objects containing
+        the details of the last n workflow runs.
+
+        :param n: The number of workflow runs to get (with n>0).
+
+        :return: A list of :class:`VibeWorkflowRun` objects.
+        """
+        if n <= 0:
+            raise ValueError(f"The number of runs (n) must be greater than 0. Got {n} instead.")
+
+        last_runs = self.list_runs()[-n:]
+        if not last_runs:
+            raise ValueError("No past runs available.")
+        elif len(last_runs) < n:
+            logging.warning(
+                f"Requested {n} runs, but only {len(last_runs)} are available. "
+                "Returning all available runs."
+            )
+        return [self.get_run_by_id(run_id) for run_id in last_runs]
 
     def get_api_time_zone(self) -> tzfile:
         """Gets the time zone of the FarmVibes.AI REST-API.
@@ -546,8 +589,109 @@ class FarmvibesAiClient(Client):
         response = self._request("POST", f"v0/runs/{run_id}/resubmit")
         return self.get_run_by_id(response["id"])
 
+    def _loop_update_monitor_table(
+        self,
+        runs: List["VibeWorkflowRun"],
+        monitor: VibeWorkflowRunMonitor,
+        refresh_time_s: int,
+        refresh_warnings_time_min: int,
+        timeout_min: Optional[int],
+    ):
+        stop_monitoring = False
+        time_start = last_warning_refresh = time.monotonic()
 
-class VibeWorkflowRun(WorkflowRun):
+        with warnings.catch_warnings(record=True) as monitored_warnings:
+            with monitor.live_context:
+                while not stop_monitoring:
+                    monitor.update_run_status(
+                        [cast(MonitoredWorkflowRun, run) for run in runs],
+                        [w.message for w in monitored_warnings],
+                    )
+
+                    time.sleep(refresh_time_s)
+                    current_time = time.monotonic()
+
+                    # Check for warnings every refresh_warnings_time_min minutes
+                    if (current_time - last_warning_refresh) / 60.0 > refresh_warnings_time_min:
+                        self.verify_disk_space()
+                        last_warning_refresh = current_time
+
+                    # Check for timeout
+                    did_timeout = (
+                        timeout_min is not None and (current_time - time_start) / 60.0 > timeout_min
+                    )
+                    stop_monitoring = (
+                        all(
+                            [
+                                RunStatus.finished(r.status) or r.status == RunStatus.deleted
+                                for r in runs
+                            ]
+                        )
+                        or did_timeout
+                    )
+
+                # Update one last time to make sure we have the latest state
+                monitor.update_run_status(
+                    [cast(MonitoredWorkflowRun, run) for run in runs],
+                    [w.message for w in monitored_warnings],
+                )
+
+    def monitor(
+        self,
+        runs: Union[List["VibeWorkflowRun"], "VibeWorkflowRun", int] = 1,
+        refresh_time_s: int = 1,
+        refresh_warnings_time_min: int = 5,
+        timeout_min: Optional[int] = None,
+        detailed_task_info: bool = False,
+    ) -> None:
+        """Monitors workflow runs.
+
+        This method will block and print the status of the runs each refresh_time_s seconds,
+        until the workflow runs finish or it reaches timeout_min minutes. It will also
+        print warnings every refresh_warnings_time_min minutes.
+
+        :param runs: A list of workflow runs, a single run object, or an integer. The method will
+            monitor the provided workflow runs. If a list of runs is provided, the method will
+            provide a summarized table with the status of each run. If only one run is provided,
+            the method will monitor that run directly. If an integer > 0 is provided, the method
+            will fetch the respective last runs and provide the summarized monitor table.
+
+        :param refresh_time_s: Refresh interval in seconds (defaults to 1 second).
+
+        :param refresh_warnings_time_min: Refresh interval in minutes for updating
+            the warning messages (defaults to 5 minutes).
+
+        :param timeout_min: The maximum time to monitor the workflow run, in minutes.
+            If not provided, the method will monitor indefinitely.
+
+        :param detailed_task_info: If True, detailed information about task progress
+            will be included in the output (defaults to False).
+
+        :raises ValueError: If no workflow runs are provided (empty list).
+        """
+        if isinstance(runs, int):
+            runs = self.get_last_runs(runs)
+
+        if isinstance(runs, VibeWorkflowRun):
+            runs = [runs]
+
+        runs = cast(List[VibeWorkflowRun], runs)
+
+        if len(runs) == 0:
+            raise ValueError("At least one workflow run must be provided.")
+
+        monitor = VibeWorkflowRunMonitor(
+            api_time_zone=self.get_api_time_zone(),
+            detailed_task_info=detailed_task_info,
+            multi_run=len(runs) > 1,
+        )
+
+        self._loop_update_monitor_table(
+            runs, monitor, refresh_time_s, refresh_warnings_time_min, timeout_min
+        )
+
+
+class VibeWorkflowRun(WorkflowRun, MonitoredWorkflowRun):
     """Represents a workflow run in FarmVibes.AI.
 
     :param id: The ID of the workflow run.
@@ -621,11 +765,39 @@ class VibeWorkflowRun(WorkflowRun):
             )
         }
 
+    def _block_until_status(
+        self,
+        block_until_statuses: List[RunStatus],
+        timeout_s: Optional[int] = None,
+    ) -> "VibeWorkflowRun":
+        """Blocks until the workflow run has a status that has been specified, with an optional
+        timeout in seconds.
+
+        :param timeout_s:  Optional timeout in seconds to wait for the workflow to reach one of the
+          desired statuses. If not provided, the method will wait indefinitely.
+
+        :raises RuntimeError: If the run does not complete before timeout_s.
+
+        :return: The workflow run object.
+        """
+        time_start = time.monotonic()
+        while self.status not in block_until_statuses:
+            time.sleep(self.wait_s)
+            if timeout_s is not None and (time.monotonic() - time_start) > timeout_s:
+                status_options = " or ".join(block_until_statuses)
+                raise RuntimeError(
+                    f"Timeout of {timeout_s}s reached while waiting for the workflow to have a "
+                    f"status of {status_options}."
+                )
+        return self
+
     @property
     def status(self) -> RunStatus:
         """Gets the status of the workflow run."""
-        if not RunStatus.finished(self._status):
-            self._status = RunStatus(self.client.list_runs(self.id)[0]["details.status"])
+        if self._status is not RunStatus.deleted:
+            self._status = cast(
+                RunStatus, RunStatus(self.client.list_runs(self.id)[0]["details.status"])
+            )
         return self._status
 
     @property
@@ -671,18 +843,18 @@ class VibeWorkflowRun(WorkflowRun):
 
         """
         status = self.status
-        if status == RunStatus.done:
+        if status == RunStatus.failed:
+            run = self.client.list_runs(self.id, "details.reason")[0]
+            self._reason = format_double_escaped(run["details.reason"])
+        elif status == RunStatus.done:
             self._reason = "Workflow run was successful."
-        elif status in [RunStatus.cancelled, RunStatus.cancelling]:
+        elif status == RunStatus.cancelled:
             self._reason = f"Workflow run {status}."
-        elif status in [RunStatus.running, RunStatus.pending]:
+        else:
             self._reason = (
                 f"Workflow run is {status}. "
                 f"Check {self.__class__.__name__}.monitor() for task updates."
             )
-        else:  # RunStatus.failed
-            run = self.client.list_runs(self.id, "details.reason")[0]
-            self._reason = format_double_escaped(run["details.reason"])
         return self._reason
 
     def cancel(self) -> "VibeWorkflowRun":
@@ -694,6 +866,15 @@ class VibeWorkflowRun(WorkflowRun):
         self.status
         return self
 
+    def delete(self) -> "VibeWorkflowRun":
+        """Deletes the workflow run.
+
+        :return: The workflow run.
+        """
+        self.client.delete_run(self.id)
+        self.status
+        return self
+
     def resubmit(self) -> "VibeWorkflowRun":
         """
         Resubmits the current workflow run.
@@ -702,7 +883,26 @@ class VibeWorkflowRun(WorkflowRun):
         """
         return self.client.resubmit_run(self.id)
 
-    def block_until_complete(self, timeout_s: Optional[int] = None) -> "VibeWorkflowRun":
+    def block_until_cancelled(
+        self,
+        timeout_s: Optional[int] = None,
+    ) -> "VibeWorkflowRun":
+        """Blocks until the workflow run is cancelled, with an optional timeout in seconds.
+
+        :param timeout_s:  Optional timeout in seconds to wait for the workflow to be cancelled.
+            If not provided, the method will wait indefinitely.
+
+        :raises RuntimeError: If the run is not cancelled before timeout_s.
+
+        :return: The workflow run object.
+        """
+        self._block_until_status([RunStatus.cancelled], timeout_s)
+        return self
+
+    def block_until_complete(
+        self,
+        timeout_s: Optional[int] = None,
+    ) -> "VibeWorkflowRun":
         """Blocks until the workflow run execution completes or fails, with an optional
         timeout in seconds.
 
@@ -713,13 +913,23 @@ class VibeWorkflowRun(WorkflowRun):
 
         :return: The workflow run object.
         """
-        time_start = time.time()
-        while self.status not in (RunStatus.done, RunStatus.failed):
-            time.sleep(self.wait_s)
-            if timeout_s is not None and (time.time() - time_start) > timeout_s:
-                raise RuntimeError(
-                    f"Timeout of {timeout_s}s reached while waiting for workflow completion"
-                )
+        self._block_until_status([RunStatus.done, RunStatus.failed], timeout_s)
+        return self
+
+    def block_until_deleted(
+        self,
+        timeout_s: Optional[int] = None,
+    ) -> "VibeWorkflowRun":
+        """Blocks until the workflow run is deleted, with an optional timeout in seconds.
+
+        :param timeout_s:  Optional timeout in seconds to wait for the workflow to be deleted.
+            If not provided, the method will wait indefinitely.
+
+        :raises RuntimeError: If the run does not complete before timeout_s.
+
+        :return: The workflow run object.
+        """
+        self._block_until_status([RunStatus.deleted], timeout_s)
         return self
 
     def monitor(
@@ -731,9 +941,8 @@ class VibeWorkflowRun(WorkflowRun):
     ):
         """Monitors the workflow run.
 
-        This method will block and print the status of the run each refresh_time_s seconds,
-        until the workflow run finishes or it reaches timeout_min minutes. It will also
-        print warnings every refresh_warnings_time_min minutes.
+        This method will call :meth:`vibe_core.client.FarmvibesAiClient.monitor` to monitor
+        the workflow run.
 
         :param refresh_time_s: Refresh interval in seconds (defaults to 1 second).
 
@@ -746,49 +955,14 @@ class VibeWorkflowRun(WorkflowRun):
         :param detailed_task_info: If True, detailed information about task progress
             will be included in the output (defaults to False).
         """
-        with warnings.catch_warnings(record=True) as monitored_warnings:
-            monitor = VibeWorkflowRunMonitor(
-                api_time_zone=self.client.get_api_time_zone(),
-                detailed_task_info=detailed_task_info,
-            )
 
-            stop_monitoring = False
-            time_start = last_warning_refresh = time.time()
-
-            with monitor.live_context:
-                while not stop_monitoring:
-                    monitor.update_run_status(
-                        self.workflow,
-                        self.name,
-                        self.id,
-                        self.status,
-                        self.task_details,
-                        [w.message for w in monitored_warnings],
-                    )
-
-                    time.sleep(refresh_time_s)
-                    curent_time = time.time()
-
-                    # Check for warnings every refresh_warnings_time_min minutes
-                    if (curent_time - last_warning_refresh) / 60.0 > refresh_warnings_time_min:
-                        self.client.verify_disk_space()
-                        last_warning_refresh = curent_time
-
-                    # Check for timeout
-                    did_timeout = (
-                        timeout_min is not None and (curent_time - time_start) / 60.0 > timeout_min
-                    )
-                    stop_monitoring = RunStatus.finished(self.status) or did_timeout
-
-                # Update one last time to make sure we have the latest state
-                monitor.update_run_status(
-                    self.workflow,
-                    self.name,
-                    self.id,
-                    self.status,
-                    self.task_details,
-                    [w.message for w in monitored_warnings],
-                )
+        self.client.monitor(
+            runs=[self],
+            refresh_time_s=refresh_time_s,
+            refresh_warnings_time_min=refresh_warnings_time_min,
+            timeout_min=timeout_min,
+            detailed_task_info=detailed_task_info,
+        )
 
     def __repr__(self):
         """Gets the string representation of the workflow run.
@@ -821,23 +995,43 @@ def get_remote_service_url() -> str:
 
     :return: The remote service URL.
     """
-    try:
-        with open(FARMVIBES_AI_REMOTE_SERVICE_URL_PATH, "r") as fp:
-            return fp.read().strip()
-    except FileNotFoundError as e:
-        print(e)
-        raise
+    with open(FARMVIBES_AI_REMOTE_SERVICE_URL_PATH, "r") as fp:
+        return fp.read().strip()
 
 
-def get_default_vibe_client(url: str = "", connect_remote: bool = False):
-    """Gets the default vibe client.
+def get_vibe_client(url: str):
+    """Gets a vibe client given an API base URL.
 
     :param url: The URL.
-    :param connect_remote: Whether to connect remotely.
 
     :return: The vibe client.
     """
     if not url:
-        url = get_remote_service_url() if connect_remote else get_local_service_url()
-
+        raise ValueError("URL for vibe client must be provided")
     return FarmvibesAiClient(url)
+
+
+def get_default_vibe_client(type: Union[str, ClusterType] = ""):
+    """Gets the default vibe client.
+
+    If given a cluster type, it will try to connect to a cluster of that type
+    assuming the data files are present.
+
+    Otherwise, it will try to connect to a remote cluster first, and if that
+    fails, try to connect to the local one (if it exists).
+
+    :param type: The type of the cluster (from `ClusterType`) to connect to.
+
+    :return: The vibe client.
+    """
+
+    if not type:
+        try:
+            return FarmvibesAiClient(get_remote_service_url())
+        except Exception:
+            return FarmvibesAiClient(get_local_service_url())
+
+    if isinstance(type, str):
+        type = ClusterType(type)
+
+    return cast(ClusterType, type).client()

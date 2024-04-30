@@ -1,4 +1,5 @@
 import mimetypes
+import re
 from dataclasses import dataclass, field
 from typing import Dict, cast
 
@@ -26,6 +27,9 @@ class DemProduct(DataVibe):
 
     resolution: int
     """The resolution of the DEM tile."""
+
+    provider: str
+    """The provider of the DEM tile."""
 
 
 @dataclass
@@ -119,6 +123,13 @@ class Era5Product(DataVibe):
 
 
 @dataclass
+class AlosProduct(DataVibe):
+    """Represents metadata information about an Advanced Land Observing Satellite (ALOS) product."""
+
+    pass
+
+
+@dataclass
 class ModisProduct(DataVibe):
     """Represents metadata information about a
     Moderate Resolution Imaging Spectroradiometer (MODIS) product.
@@ -161,3 +172,166 @@ class ClimatologyLabProduct(DataVibe):
     """The URL of the Climatology Lab product."""
     variable: str
     """The variable of the Climatology Lab product."""
+
+
+@dataclass
+class GLADProduct(DataVibe):
+    """Represents metadata information about a Global Land Analysis (GLAD) product."""
+
+    url: str
+    """The URL of the GLAD product."""
+
+    @property
+    def tile_name(self) -> str:
+        """The tile name of the GLAD product."""
+        # Extract the tile name from the URL
+        tile_name = self.url.split("/")[-1].split(".")[0]
+        return tile_name
+
+
+@dataclass
+class HansenProduct(DataVibe):
+    """
+    Represents metadata information about a Hansen product.
+    """
+
+    asset_keys = ["treecover2000", "gain", "lossyear", "datamask", "first", "last"]
+    """ The asset keys (dataset layers) for the Hansen products."""
+
+    asset_url: str = field(default_factory=str)
+    """ The URL of the Hansen product."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        valid = self.validate_url()
+        if not valid:
+            raise ValueError(f"Invalid URL: {self.asset_url}")
+
+    def validate_url(self):
+        # Urls are expected to be in the format:
+        # 'https://storage.googleapis.com/earthenginepartners-hansen/GFC-2022-v1.10/Hansen_GFC-2022-v1.10_treecover2000_20N_090W.tif'
+        pattern = (
+            r"https://storage\.googleapis\.com/earthenginepartners-hansen"
+            r"/GFC-\d{4}-v\d+\.\d+/Hansen_GFC-\d{4}-v\d+\.\d+_\w+"
+            r"_\d{2}[NS]_\d{3}[WE]\.tif"
+        )
+        match = re.match(pattern, self.asset_url)
+        return bool(match)
+
+    @staticmethod
+    def extract_hansen_url_property(
+        asset_url: str, regular_expression: str, property_name: str
+    ) -> str:
+        """Extracts the property from the base URL and the tile name."""
+
+        # Use re.search to find the pattern in the URL
+        match = re.search(regular_expression, asset_url)
+
+        if match is None:
+            raise ValueError(f"Could not extract {property_name} from {asset_url}")
+
+        return match.group(1)
+
+    @staticmethod
+    def extract_tile_name(asset_url: str) -> str:
+        """Extracts the tile name from the base URL and the tile name."""
+
+        # Define the regex pattern for the tile name
+        # The tile name is expected to be in the format: '20N_090W'
+        pattern = r"(\d{2}[NS]_\d{3}[WE])"
+
+        return HansenProduct.extract_hansen_url_property(asset_url, pattern, "tile name")
+
+    @staticmethod
+    def extract_last_year(asset_url: str) -> int:
+        """Extracts the last year from the base URL and the tile name."""
+
+        # Define the regex pattern for the last year - e.g., GFC-2022-v1.10 -> 2022
+        pattern = r"GFC-(\d{4})-"
+
+        return int(HansenProduct.extract_hansen_url_property(asset_url, pattern, "last year"))
+
+    @staticmethod
+    def extract_version(asset_url: str) -> str:
+        """Extracts the version from the base URL and the tile name."""
+
+        # Define the regex pattern for the version - e.g., GFC-2022-v1.10 -> v1.10
+        pattern = r"GFC-\d{4}-(v\d+\.\d+)"
+
+        return HansenProduct.extract_hansen_url_property(asset_url, pattern, "version")
+
+    @staticmethod
+    def extract_layer_name(asset_url: str) -> str:
+        """Extracts the layer name from the base URL and the tile name."""
+
+        # Define the regex pattern for the layer name
+        pattern = r"_(\w+)_(\d{2}[NS]_\d{3}[WE])"
+
+        return HansenProduct.extract_hansen_url_property(asset_url, pattern, "layer name")
+
+    @property
+    def tile_name(self) -> str:
+        """The tile name of the Hansen product."""
+        return self.extract_tile_name(self.asset_url)
+
+    @property
+    def last_year(self) -> int:
+        """The last year of the Hansen product."""
+        return self.extract_last_year(self.asset_url)
+
+    @property
+    def version(self) -> str:
+        """The version of the Hansen product."""
+        return self.extract_version(self.asset_url)
+
+    @property
+    def layer_name(self) -> str:
+        """The layer name of the Hansen product."""
+        return self.extract_layer_name(self.asset_url)
+
+
+@dataclass
+class EsriLandUseLandCoverProduct(DataVibe):
+    """Represents metadata information about Esri LandUse/LandCover (9-class) dataset."""
+
+    pass
+
+
+@dataclass
+class HerbieProduct(DataVibe):
+    """Stands for Herbie products metadata
+    https://herbie.readthedocs.io/en/latest/index.html
+    """
+
+    model: str
+    """model name, e.g., 'hrrr', 'hrrrak', 'rap', 'gfs', 'gfs_wave', 'rrfs'"""
+    product: str
+    """product file type: 'sfc' (surface fields), 'prs' (pressure fields), 'nat' (native fields),
+    'subh' (subhourly fields)
+    """
+    lead_time_hours: int
+    """lead time in hours"""
+    search_text: str
+    """regular expression used to search on GRIB2 Index files"""
+
+
+@dataclass
+class BingMapsProduct(DataVibe):
+    """
+    Represents metadata of a BingMaps product.
+    """
+
+    url: str
+    """The download URL of the product."""
+
+    zoom_level: int
+    """The zoom level of the product."""
+
+    imagery_set: str
+    """The imagery set of the product."""
+
+    map_layer: str
+    """The map layer of the product."""
+
+    orientation: float
+    """The orientation of the product."""

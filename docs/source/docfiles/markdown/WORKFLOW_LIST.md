@@ -6,6 +6,7 @@ We group FarmVibes.AI workflows in the following categories:
 This includes raw data sources (e.g., Sentinel 1 and 2, LandSat, CropDataLayer) as well as the SpaceEye cloud-removal model;
 - **Data Processing**: workflows that transform data into different data types (e.g., computing NDVI/MSAVI/Methane indexes, aggregating mean/max/min statistics of rasters, timeseries aggregation);
 - **FarmAI**:  composed workflows (data ingestion + processing) whose outputs enable FarmAI scenarios (e.g., predicting conservation practices, estimating soil carbon sequestration, identifying methane leakage);
+- **ForestAI**: composed workflows (data ingestion + processing) whose outputs enable ForestAI scenarios (e.g., detecting forest change, estimating forest extent);
 - **ML**: machine learning-related workflows to train, evaluate, and infer models within the FarmVibes.AI platform (e.g., dataset creation, inference);
 
 Below is a list of all available workflows within the FarmVibes.AI platform. For each of them, we provide a brief description and a link to the corresponding documentation page.
@@ -14,13 +15,21 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 ## data_ingestion
 
-- [`admag/admag_seasonal_field` 📄](workflow_yaml/data_ingestion/admag/admag_seasonal_field.md): Generates SeasonalFieldInformation using ADMAg (Microsoft Azure Data Management for Agriculture).
+- [`admag/admag_seasonal_field` 📄](workflow_yaml/data_ingestion/admag/admag_seasonal_field.md): Generates SeasonalFieldInformation using ADMAg (Microsoft Azure Data Manager for Agriculture).
 
 - [`admag/prescriptions` 📄](workflow_yaml/data_ingestion/admag/prescriptions.md): Fetches prescriptions using ADMAg (Microsoft Azure Data Manager for Agriculture).
 
 - [`airbus/airbus_download` 📄](workflow_yaml/data_ingestion/airbus/airbus_download.md): Downloads available AirBus imagery for the input geometry and time range.
 
 - [`airbus/airbus_price` 📄](workflow_yaml/data_ingestion/airbus/airbus_price.md): Prices available AirBus imagery for the input geometry and time range.
+
+- [`alos/alos_forest_extent_download` 📄](workflow_yaml/data_ingestion/alos/alos_forest_extent_download.md): Downloads Advanced Land Observing Satellite (ALOS) forest/non-forest classification map.
+
+- [`alos/alos_forest_extent_download_merge` 📄](workflow_yaml/data_ingestion/alos/alos_forest_extent_download_merge.md): Downloads Advanced Land Observing Satellite (ALOS) forest/non-forest classification map and merges it into a single raster.
+
+- [`bing/basemap_download` 📄](workflow_yaml/data_ingestion/bing/basemap_download.md): Downloads Bing Maps basemaps.
+
+- [`bing/basemap_download_merge` 📄](workflow_yaml/data_ingestion/bing/basemap_download_merge.md): Downloads Bing Maps basemap tiles and merges them into a single raster.
 
 - [`cdl/download_cdl` 📄](workflow_yaml/data_ingestion/cdl/download_cdl.md): Downloads crop classes maps in the continental USA for the input time range.
 
@@ -30,7 +39,13 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 - [`gedi/download_gedi_rh100` 📄](workflow_yaml/data_ingestion/gedi/download_gedi_rh100.md): Downloads L2B GEDI products and extracts RH100 variables.
 
+- [`glad/glad_forest_extent_download` 📄](workflow_yaml/data_ingestion/glad/glad_forest_extent_download.md): Downloads Global Land Analysis (GLAD) forest extent data.
+
+- [`glad/glad_forest_extent_download_merge` 📄](workflow_yaml/data_ingestion/glad/glad_forest_extent_download_merge.md): Downloads the tiles from Global Land Analysis (GLAD) forest data that intersect with the user input geometry and time range, and merges them into a single raster.
+
 - [`gnatsgo/download_gnatsgo` 📄](workflow_yaml/data_ingestion/gnatsgo/download_gnatsgo.md): Downloads gNATSGO raster data that intersect with the input geometry and time range.
+
+- [`hansen/hansen_forest_change_download` 📄](workflow_yaml/data_ingestion/hansen/hansen_forest_change_download.md): Downloads and merges Global Forest Change (Hansen) rasters that intersect the user-provided geometry/time range.
 
 - [`landsat/preprocess_landsat` 📄](workflow_yaml/data_ingestion/landsat/preprocess_landsat.md): Downloads and preprocesses LANDSAT tiles that intersect with the input geometry and time range.
 
@@ -43,8 +58,6 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 - [`osm_road_geometries` 📄](workflow_yaml/data_ingestion/osm_road_geometries.md): Downloads road geometry for input region from Open Street Maps.
 
 - [`sentinel1/preprocess_s1` 📄](workflow_yaml/data_ingestion/sentinel1/preprocess_s1.md): Downloads and preprocesses tiles of Sentinel-1 imagery that intersect with the input Sentinel-2 products in the input time range.
-
-- [`sentinel1/preprocess_s1_rtc` 📄](workflow_yaml/data_ingestion/sentinel1/preprocess_s1_rtc.md): Downloads and preprocesses tiles of Sentinel-1 imagery that intersect with the input Sentinel-2 products in the input time range.
 
 - [`sentinel2/cloud_ensemble` 📄](workflow_yaml/data_ingestion/sentinel2/cloud_ensemble.md): Computes the cloud probability of a Sentinel-2 L2A raster using an ensemble of five cloud segmentation models.
 
@@ -78,6 +91,8 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 - [`user_data/ingest_raster` 📄](workflow_yaml/data_ingestion/user_data/ingest_raster.md): Adds user rasters into the cluster storage, allowing for them to be used on workflows.
 
+- [`user_data/ingest_smb` 📄](workflow_yaml/data_ingestion/user_data/ingest_smb.md): Adds user rasters into the cluster storage from an SMB share, allowing for them to be used on workflows.
+
 - [`weather/download_chirps` 📄](workflow_yaml/data_ingestion/weather/download_chirps.md): Downloads accumulated precipitation data from the CHIRPS dataset.
 
 - [`weather/download_era5` 📄](workflow_yaml/data_ingestion/weather/download_era5.md): Hourly estimated weather variables.
@@ -85,6 +100,8 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 - [`weather/download_era5_monthly` 📄](workflow_yaml/data_ingestion/weather/download_era5_monthly.md): Monthly estimated weather variables.
 
 - [`weather/download_gridmet` 📄](workflow_yaml/data_ingestion/weather/download_gridmet.md): Daily surface meteorological properties from GridMET.
+
+- [`weather/download_herbie` 📄](workflow_yaml/data_ingestion/weather/download_herbie.md): Downloads forecast data for provided location & time range using herbie python package.
 
 - [`weather/download_terraclimate` 📄](workflow_yaml/data_ingestion/weather/download_terraclimate.md): Monthly climate and hydroclimate properties from TerraClimate.
 
@@ -97,11 +114,16 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 ## data_processing
 
-- [`chunk_onnx/chunk_onnx` 📄](workflow_yaml/data_processing/chunk_onnx/chunk_onnx.md): Run an Onnx model over all rasters in the input to produce a single raster.
+- [`chunk_onnx/chunk_onnx` 📄](workflow_yaml/data_processing/chunk_onnx/chunk_onnx.md): Runs an Onnx model over all rasters in the input to produce a single raster.
+
+- [`chunk_onnx/chunk_onnx_sequence` 📄](workflow_yaml/data_processing/chunk_onnx/chunk_onnx_sequence.md): Runs an Onnx model over all rasters in the input to produce a single raster.
 
 - [`clip/clip` 📄](workflow_yaml/data_processing/clip/clip.md): Performs a soft clip on an input raster based on a provided reference geometry.
 
 - [`gradient/raster_gradient` 📄](workflow_yaml/data_processing/gradient/raster_gradient.md): Computes the gradient of each band of the input raster with a Sobel operator.
+
+- [`heatmap/classification` 📄](workflow_yaml/data_processing/heatmap/classification.md): Utilizes input Sentinel-2 satellite imagery & the sensor samples as labeled data that contain nutrient information (Nitrogen, Carbon, pH, Phosphorus) to train a model using Random Forest classifier. The inference operation predicts nutrients in soil for the chosen farm boundary.
+
 
 - [`index/index` 📄](workflow_yaml/data_processing/index/index.md): Computes an index from the bands of an input raster.
 
@@ -128,9 +150,11 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 - [`agriculture/green_house_gas_fluxes` 📄](workflow_yaml/farm_ai/agriculture/green_house_gas_fluxes.md): Computes Green House Fluxes for a region and date range
 
-- [`agriculture/heatmap_sensor` 📄](workflow_yaml/farm_ai/agriculture/heatmap_sensor.md): Utilizes input Sentinel-2 satellite imagery & the sensor samples as labeled data that contain nutrient information (Nitrogen, Carbon, pH, Phosphorus) to train a model using Random Forest classifier. The inference operation predicts nutrients in soil for the chosen farm boundary.
+- [`agriculture/heatmap_using_classification` 📄](workflow_yaml/farm_ai/agriculture/heatmap_using_classification.md): The workflow generates a nutrient heatmap for samples provided by user by downloading the samples from user input.
 
-- [`agriculture/heatmap_sensor_admag` 📄](workflow_yaml/farm_ai/agriculture/heatmap_sensor_admag.md): Utilizes input Sentinel-2 satellite imagery & the sensor samples as labeled data that contain nutrient information (Nitrogen, Carbon, pH, Phosphorus) to train a model using Random Forest classifier. The inference operation predicts nutrients in soil for the chosen farm boundary.
+- [`agriculture/heatmap_using_classification_admag` 📄](workflow_yaml/farm_ai/agriculture/heatmap_using_classification_admag.md): This workflow integrate the ADMAG API to download prescriptions and generate heatmap.
+
+- [`agriculture/heatmap_using_neighboring_data_points` 📄](workflow_yaml/farm_ai/agriculture/heatmap_using_neighboring_data_points.md): Creates heatmap using the neighbors by performing spatial interpolation operations. It utilizes soil information collected at optimal sensor/sample locations and downloaded sentinel satellite imagery.
 
 - [`agriculture/methane_index` 📄](workflow_yaml/farm_ai/agriculture/methane_index.md): Computes methane index from ultra emitters for a region and date range.
 
@@ -138,7 +162,7 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 - [`agriculture/weed_detection` 📄](workflow_yaml/farm_ai/agriculture/weed_detection.md): Generates shape files for similarly colored regions in the input raster.
 
-- [`carbon_local/admag_carbon_integration` 📄](workflow_yaml/farm_ai/carbon_local/admag_carbon_integration.md): Computes the offset amount of carbon that would be sequestered in a seasonal field using Azure Data Manager for Ag data.
+- [`carbon_local/admag_carbon_integration` 📄](workflow_yaml/farm_ai/carbon_local/admag_carbon_integration.md): Computes the offset amount of carbon that would be sequestered in a seasonal field using Microsoft Azure Data Manager for Agriculture (ADMAg) data.
 
 - [`carbon_local/carbon_whatif` 📄](workflow_yaml/farm_ai/carbon_local/carbon_whatif.md): Computes the offset amount of carbon that would be sequestered in a seasonal field using the baseline (historical) and scenario (time range interested in) information.
 
@@ -148,6 +172,21 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 
 - [`land_degradation/ndvi_linear_trend` 📄](workflow_yaml/farm_ai/land_degradation/ndvi_linear_trend.md): Computes the pixel-wise NDVI linear trend over the input raster.
 
+- [`segmentation/segment_basemap` 📄](workflow_yaml/farm_ai/segmentation/segment_basemap.md): Downloads basemap with BingMaps API and runs Segment Anything Model (SAM) over them with points and/or bounding boxes as prompts.
+
+- [`segmentation/segment_s2` 📄](workflow_yaml/farm_ai/segmentation/segment_s2.md): Downloads Sentinel-2 imagery and runs Segment Anything Model (SAM) over them with points and/or bounding boxes as prompts.
+
+- [`sensor/optimal_locations` 📄](workflow_yaml/farm_ai/sensor/optimal_locations.md): Identify optimal locations by performing clustering operation using Gaussian Mixture model on computed raster indices.
+
+- [`water/irrigation_classification` 📄](workflow_yaml/farm_ai/water/irrigation_classification.md): Develops 30m pixel-wise irrigation probability map.
+
+
+## forest_ai
+
+- [`deforestation/alos_trend_detection` 📄](workflow_yaml/forest_ai/deforestation/alos_trend_detection.md): Detects increase/decrease trends in forest pixel levels over the user-input geometry and time range for the ALOS forest map.
+
+- [`deforestation/ordinal_trend_detection` 📄](workflow_yaml/forest_ai/deforestation/ordinal_trend_detection.md): Detects increase/decrease trends in the pixel levels over the user-input geometry and time range.
+
 
 ## ml
 
@@ -156,5 +195,9 @@ Below is a list of all available workflows within the FarmVibes.AI platform. For
 - [`dataset_generation/datagen_crop_segmentation` 📄](workflow_yaml/ml/dataset_generation/datagen_crop_segmentation.md): Generates a dataset for crop segmentation, based on NDVI raster and Crop Data Layer (CDL) maps.
 
 - [`driveway_detection` 📄](workflow_yaml/ml/driveway_detection.md): Detects driveways in front of houses.
+
+- [`segment_anything/basemap_prompt_segmentation` 📄](workflow_yaml/ml/segment_anything/basemap_prompt_segmentation.md): Runs Segment Anything Model (SAM) over BingMaps basemap rasters with points and/or bounding boxes as prompts.
+
+- [`segment_anything/s2_prompt_segmentation` 📄](workflow_yaml/ml/segment_anything/s2_prompt_segmentation.md): Runs Segment Anything Model (SAM) over Sentinel-2 rasters with points and/or bounding boxes as prompts.
 
 
